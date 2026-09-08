@@ -13,7 +13,7 @@ import skimage.measure
 import skimage.transform
 import traceback
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from langchain_core.callbacks import (
     AsyncCallbackManagerForToolRun,
     CallbackManagerForToolRun,
@@ -32,6 +32,26 @@ class ChestXRaySegmentationInput(BaseModel):
         "Left/Right Hilus Pulmonis, Heart, Aorta, Facies Diaphragmatica, "
         "Mediastinum, Weasand, Spine",
     )
+
+    @field_validator("organs", mode="before")
+    @classmethod
+    def normalize_organs(cls, value):
+        if isinstance(value, str):
+            import json
+
+            value = json.loads(value)
+
+        if not isinstance(value, list):
+            return value
+
+        normalized = []
+        for organ in value:
+            if isinstance(organ, str) and organ.startswith("Left/Right "):
+                organ_name = organ.removeprefix("Left/Right ")
+                normalized.extend([f"Left {organ_name}", f"Right {organ_name}"])
+            else:
+                normalized.append(organ)
+        return normalized
 
 
 class OrganMetrics(BaseModel):
