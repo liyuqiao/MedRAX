@@ -11,6 +11,7 @@ from langchain_core.callbacks import (
     CallbackManagerForToolRun,
 )
 from langchain_core.tools import BaseTool
+from medrax.tracing import trace_event
 
 
 class ChestXRayInput(BaseModel):
@@ -110,11 +111,13 @@ class ChestXRayClassifierTool(BaseTool):
         """
         try:
             img = self._process_image(image_path)
+            trace_event("classification_preprocessed", "Prepared chest X-ray tensor", img)
 
             with torch.inference_mode():
                 preds = self.model(img).cpu()[0]
 
             output = dict(zip(xrv.datasets.default_pathologies, preds.numpy()))
+            trace_event("classification_result", "Computed pathology probabilities", output)
             metadata = {
                 "image_path": image_path,
                 "analysis_status": "completed",
@@ -122,6 +125,12 @@ class ChestXRayClassifierTool(BaseTool):
             }
             return output, metadata
         except Exception as e:
+            trace_event(
+                "classification_error",
+                "Chest X-ray classification failed",
+                {"error": str(e)},
+                level="ERROR",
+            )
             return {"error": str(e)}, {
                 "image_path": image_path,
                 "analysis_status": "failed",

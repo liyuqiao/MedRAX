@@ -19,6 +19,7 @@ from langchain_core.callbacks import (
     CallbackManagerForToolRun,
 )
 from langchain_core.tools import BaseTool
+from medrax.tracing import trace_event
 
 
 class ChestXRaySegmentationInput(BaseModel):
@@ -271,6 +272,11 @@ class ChestXRaySegmentationTool(BaseTool):
             img = self.transform(img)
             img = torch.from_numpy(img)
             img = img.to(self.device)
+            trace_event(
+                "segmentation_preprocessed",
+                "Prepared image tensor and selected organs for segmentation",
+                {"tensor": img, "organs": organs, "organ_indices": organ_indices},
+            )
 
             # Generate predictions
             with torch.no_grad():
@@ -296,6 +302,7 @@ class ChestXRaySegmentationTool(BaseTool):
                 "segmentation_image_path": viz_path,
                 "metrics": {organ: metrics.dict() for organ, metrics in results.items()},
             }
+            trace_event("segmentation_result", "Computed organ masks and metrics", output)
 
             metadata = {
                 "image_path": image_path,
@@ -311,6 +318,12 @@ class ChestXRaySegmentationTool(BaseTool):
             return output, metadata
 
         except Exception as e:
+            trace_event(
+                "segmentation_error",
+                "Chest X-ray segmentation failed",
+                {"error": str(e)},
+                level="ERROR",
+            )
             error_output = {"error": str(e)}
             error_metadata = {
                 "image_path": image_path,

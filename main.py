@@ -20,8 +20,8 @@ _ = load_dotenv()
 def initialize_agent(
     prompt_file,
     tools_to_use=None,
-    model_dir="/model-weights",
-    temp_dir="temp",
+    model_dir="/root/autodl-tmp/medrax-models",
+    temp_dir="/root/autodl-tmp/medrax-temp",
     device="cuda",
     model="chatgpt-4o-latest",
     temperature=0.7,
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         "ChestXRayClassifierTool",
         "ChestXRaySegmentationTool",
         "ChestXRayReportGeneratorTool",
-        "XRayVQATool",
+        # "XRayVQATool",
         # "LlavaMedTool",
         # "XRayPhraseGroundingTool",
         # "ChestXRayGeneratorTool",
@@ -119,14 +119,14 @@ if __name__ == "__main__":
     agent, tools_dict = initialize_agent(
         "medrax/docs/system_prompts.txt",
         tools_to_use=selected_tools,
-        model_dir="/model-weights",  # Change this to the path of the model weights
-        temp_dir="temp",  # Change this to the path of the temporary directory
+        model_dir="/root/autodl-tmp/medrax-models",  # Change this to the path of the model weights
+        temp_dir="/root/autodl-tmp/medrax-temp",  # Change this to the path of the temporary directory
         device="cuda",  # Change this to the device you want to use
-        model="gpt-4o",  # Change this to the model you want to use, e.g. gpt-4o-mini
+        model="qwen3-vl-flash",  # Change this to the model you want to use, e.g. gpt-4o-mini
         temperature=0.7,
         top_p=0.95,
         openai_kwargs=openai_kwargs
     )
     demo = create_demo(agent, tools_dict)
 
-    demo.launch(server_name="0.0.0.0", server_port=8585, share=True)
+    demo.launch(server_name="0.0.0.0", server_port=6006, share=False)

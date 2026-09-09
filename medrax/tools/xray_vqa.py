@@ -10,6 +10,7 @@ from langchain_core.callbacks import (
     CallbackManagerForToolRun,
 )
 from langchain_core.tools import BaseTool
+from medrax.tracing import trace_event
 
 
 class XRayVQAToolInput(BaseModel):
@@ -150,6 +151,11 @@ class XRayVQATool(BaseTool):
                     raise FileNotFoundError(f"Image file not found: {path}")
 
             response = self._generate_response(image_paths, prompt, max_new_tokens)
+            trace_event(
+                "vqa_result",
+                "Chest X-ray expert generated a response",
+                {"image_paths": image_paths, "prompt": prompt, "response": response},
+            )
 
             output = {
                 "response": response,
@@ -165,6 +171,7 @@ class XRayVQATool(BaseTool):
             return output, metadata
 
         except Exception as e:
+            trace_event("vqa_error", "Chest X-ray expert failed", {"error": str(e)}, level="ERROR")
             output = {"error": str(e)}
             metadata = {
                 "image_paths": image_paths,

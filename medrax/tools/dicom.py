@@ -8,6 +8,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 from langchain_core.callbacks import AsyncCallbackManagerForToolRun, CallbackManagerForToolRun
 from langchain_core.tools import BaseTool
+from medrax.tracing import trace_event
 
 
 class DicomProcessorInput(BaseModel):
@@ -116,6 +117,16 @@ class DicomProcessorTool(BaseTool):
             img_array, metadata = self._process_dicom(dicom_path, window_center, window_width)
             output_path = self.temp_dir / f"processed_dicom_{uuid.uuid4().hex[:8]}.png"
             Image.fromarray(img_array).save(output_path)
+            trace_event(
+                "dicom_converted",
+                "Converted DICOM pixels to a displayable PNG",
+                {
+                    "dicom_path": dicom_path,
+                    "output_path": output_path,
+                    "image_shape": img_array.shape,
+                    "metadata": metadata,
+                },
+            )
 
             output = {
                 "image_path": str(output_path),
@@ -132,6 +143,7 @@ class DicomProcessorTool(BaseTool):
             return output, metadata
 
         except Exception as e:
+            trace_event("dicom_error", "DICOM conversion failed", {"error": str(e)}, level="ERROR")
             return (
                 {"error": str(e)},
                 {

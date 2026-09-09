@@ -9,6 +9,7 @@ from langchain_core.callbacks import (
     CallbackManagerForToolRun,
 )
 from langchain_core.tools import BaseTool
+from medrax.tracing import trace_event
 
 
 class ImageVisualizerInput(BaseModel):
@@ -101,6 +102,7 @@ class ImageVisualizerTool(BaseTool):
             # self._display_image(image_path, title, description, figsize, cmap)
 
             output = {"image_path": image_path}
+            trace_event("image_visualized", "Selected an image for display", output)
             metadata = {
                 "image_path": image_path,
                 "title": bool(title),
@@ -112,6 +114,7 @@ class ImageVisualizerTool(BaseTool):
             return output, metadata
 
         except Exception as e:
+            trace_event("visualization_error", "Image visualization failed", {"error": str(e)}, level="ERROR")
             return (
                 {"error": str(e)},
                 {

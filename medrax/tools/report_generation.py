@@ -8,6 +8,7 @@ from langchain_core.callbacks import (
     CallbackManagerForToolRun,
 )
 from langchain_core.tools import BaseTool
+from medrax.tracing import trace_event
 
 from PIL import Image
 
@@ -176,6 +177,11 @@ class ChestXRayReportGeneratorTool(BaseTool):
             impression_pixels = self._process_image(
                 image_path, self.impression_processor, self.impression_model
             )
+            trace_event(
+                "report_preprocessed",
+                "Prepared tensors for findings and impression generation",
+                {"findings_tensor": findings_pixels, "impression_tensor": impression_pixels},
+            )
 
             # Generate both sections
             with torch.inference_mode():
@@ -192,6 +198,11 @@ class ChestXRayReportGeneratorTool(BaseTool):
                 f"FINDINGS:\n{findings_text}\n\n"
                 f"IMPRESSION:\n{impression_text}"
             )
+            trace_event(
+                "report_result",
+                "Generated chest X-ray findings and impression",
+                {"findings": findings_text, "impression": impression_text, "report": report},
+            )
 
             metadata = {
                 "image_path": image_path,
@@ -202,6 +213,12 @@ class ChestXRayReportGeneratorTool(BaseTool):
             return report, metadata
 
         except Exception as e:
+            trace_event(
+                "report_error",
+                "Chest X-ray report generation failed",
+                {"error": str(e)},
+                level="ERROR",
+            )
             return f"Error generating report: {str(e)}", {
                 "image_path": image_path,
                 "analysis_status": "failed",

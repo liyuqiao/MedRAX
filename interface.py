@@ -7,6 +7,8 @@ import shutil
 from typing import AsyncGenerator, List, Optional, Tuple
 from gradio import ChatMessage
 
+from medrax.tracing import TraceRecorder, bind_trace, reset_trace, trace_event
+
 
 class ChatInterface:
     """
@@ -108,13 +110,50 @@ class ChatInterface:
         messages = []
         image_path = self.original_file_path or display_image
 
+        recorder = TraceRecorder.start(
+            thread_id=self.current_thread_id,
+            query=message or "",
+            image_path=image_path,
+            display_path=self.display_file_path,
+        )
+        trace_token = bind_trace(recorder)
+        final_output = None
+        trace_error = None
+        trace_event(
+            "query_input",
+            "Received a new MedRAX query",
+            {
+                "trace_id": recorder.trace_id,
+                "thread_id": self.current_thread_id,
+                "query": message,
+                "image_path": image_path,
+                "display_path": self.display_file_path,
+            },
+        )
+
         if image_path is not None:
             # Send path for tools
             messages.append({"role": "user", "content": f"image_path: {image_path}"})
 
             # Load and encode image for multimodal
-            with open(image_path, "rb") as img_file:
-                img_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+            try:
+                with open(image_path, "rb") as img_file:
+                    img_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+            except Exception as exc:
+                trace_event(
+                    "image_encoding_error",
+                    "Failed to read or encode the image",
+                    {"image_path": image_path, "error": str(exc)},
+                    level="ERROR",
+                )
+                recorder.finish(error=exc, error_stage="image_encoding")
+                reset_trace(trace_token)
+                raise
+            trace_event(
+                "image_encoded",
+                "Encoded the image for multimodal model input",
+                {"image_path": image_path, "encoded_length": len(img_base64)},
+            )
 
             messages.append(
                 {
@@ -131,15 +170,32 @@ class ChatInterface:
         if message is not None:
             messages.append({"role": "user", "content": [{"type": "text", "text": message}]})
 
+        trace_event(
+            "workflow_input",
+            "Constructed the query messages and entered the LangGraph workflow",
+            {"message_count": len(messages), "messages": messages},
+        )
+
         try:
             for event in self.agent.workflow.stream(
                 {"messages": messages}, {"configurable": {"thread_id": self.current_thread_id}}
             ):
                 if isinstance(event, dict):
+                    trace_event(
+                        "workflow_event",
+                        "Received a LangGraph node event",
+                        {"nodes": list(event.keys()), "event": event},
+                    )
                     if "process" in event:
                         content = event["process"]["messages"][-1].content
                         if content:
                             content = re.sub(r"temp/[^\s]*", "", content)
+                            final_output = content
+                            trace_event(
+                                "assistant_output",
+                                "Received non-empty assistant content from the process node",
+                                {"content": content},
+                            )
                             chat_history.append(ChatMessage(role="assistant", content=content))
                             yield chat_history, self.display_file_path, ""
 
@@ -176,12 +232,32 @@ class ChatInterface:
                             yield chat_history, self.display_file_path, ""
 
         except Exception as e:
+            trace_error = e
+            trace_event(
+                "query_error",
+                "The MedRAX query failed",
+                {"error_type": type(e).__name__, "error": str(e)},
+                level="ERROR",
+            )
             chat_history.append(
                 ChatMessage(
                     role="assistant", content=f"❌ Error: {str(e)}", metadata={"title": "Error"}
                 )
             )
             yield chat_history, self.display_file_path, ""
+        finally:
+            trace_event(
+                "query_completed" if trace_error is None else "query_failed",
+                "Finished processing the MedRAX query",
+                {"final_output": final_output, "failed": trace_error is not None},
+                level="INFO" if trace_error is None else "ERROR",
+            )
+            recorder.finish(
+                final_output=final_output,
+                error=trace_error,
+                error_stage="process_message" if trace_error else None,
+            )
+            reset_trace(trace_token)
 
 
 def create_demo(agent, tools_dict):
