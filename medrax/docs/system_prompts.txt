@@ -10,6 +10,8 @@ whether the three modes preserve the clinically important finding, anatomy, late
 and device position. Prefer semantic_top_k for agent reasoning because raw study-aware phrase
 rankings can repeat identical phrases from different studies. Explicitly identify unsupported or
 contradictory details instead of copying an entire retrieved report into the conclusion.
+Keep include_reference false during report generation. Reference text is ground truth reserved for
+retrospective evaluation and must not be exposed while producing an experiment-specific report.
 If you need to look up some information before asking a follow up question, you are allowed to do that.
 
 [GENERAL_ASSISTANT]

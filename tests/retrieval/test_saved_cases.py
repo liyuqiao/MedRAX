@@ -36,6 +36,15 @@ def test_compare_returns_same_image_results_and_semantic_phrases(tmp_path):
     assert result["combined_phrase_retrieval"]["top_k"][0]["phrases"] == [
         "edema located_at pulmonary", "tip located_at esophagus"]
     assert result["independent_phrase_retrieval"]["semantic_top_k"][0]["duplicate_count"] == 2
+    assert "reference_text" not in result["report_retrieval"]
+    assert "reference_phrases" not in result["independent_phrase_retrieval"]
+
+
+def test_compare_includes_reference_only_when_requested(tmp_path):
+    retriever = SavedCaseRetriever(*_paths(tmp_path))
+    result = retriever.compare(sample_id="image-a", include_reference=True)
+    assert result["report_retrieval"]["reference_text"] == "reference report"
+    assert result["independent_phrase_retrieval"]["reference_phrases"] == []
 
 
 def test_compare_accepts_image_path_basename(tmp_path):

@@ -36,6 +36,10 @@ Ask the agent to analyze an uploaded known test image, or invoke the tool with:
 The response includes the raw study-aware phrase ranking and `semantic_top_k`, which collapses
 identical phrase text from different studies while retaining source study IDs.
 
+Ground-truth text is hidden by default. Keep `include_reference=false` while the agent generates
+reports. It may be enabled only during retrospective evaluation after all experiment-specific
+reports have been generated.
+
 ## Render existing cases
 
 ```bash
@@ -58,3 +62,24 @@ Run from the MedRAX repository root after installing its environment:
 pytest tests/retrieval tests/tools/test_cxr_retrieval.py -q
 python -m medrax.retrieval.case_analysis --help
 ```
+
+## Generate final MedRAX reports
+
+The batch runner invokes the agent independently for experiments 1, 2, and 4, then supplies the
+three completed reports and the reference report to a separate retrospective comparison turn:
+
+```bash
+export OPENAI_API_KEY="..."
+export OPENAI_BASE_URL="..."  # omit for the default OpenAI endpoint
+
+python run_cxr_retrieval_reports.py \
+  --report-results /root/autodl-tmp/cxr-clip/outputs/badcase/base-report.jsonl \
+  --combined-results /root/autodl-tmp/cxr-clip/outputs/badcase/base-triple.jsonl \
+  --independent-results /root/autodl-tmp/cxr-clip/outputs/phrase-retrieval-badcase/baseline/retrieval-details.jsonl \
+  --model qwen3-vl-flash \
+  --output-dir outputs/agent-retrieval-reports
+```
+
+With the four default case IDs this creates 12 independent experiment reports, four retrospective
+comparison reports, and `all-results.json`. Pass one or more `--sample-id` arguments to select a
+different subset.

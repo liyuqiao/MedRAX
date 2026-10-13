@@ -40,7 +40,8 @@ def main() -> None:
     args = parser.parse_args()
     retriever = SavedCaseRetriever(
         args.report_results, args.combined_results, args.independent_results)
-    sections = [render_case_markdown(retriever.compare(sample_id=sample_id, top_k=args.top_k))
+    sections = [render_case_markdown(retriever.compare(
+                    sample_id=sample_id, top_k=args.top_k, include_reference=True))
                 for sample_id in args.sample_id]
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

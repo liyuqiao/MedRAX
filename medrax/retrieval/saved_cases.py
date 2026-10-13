@@ -57,7 +57,8 @@ class SavedCaseRetriever:
             raise KeyError(f"sample_id {sample_id!r} not found in {mode.value} results") from exc
 
     @staticmethod
-    def _text_result(record: dict[str, Any], top_k: int, combined: bool) -> dict[str, Any]:
+    def _text_result(record: dict[str, Any], top_k: int, combined: bool,
+                     include_reference: bool = False) -> dict[str, Any]:
         rows = []
         for position, source in enumerate(record.get("top_k", [])[:top_k], 1):
             text = source.get("text", "")
@@ -72,24 +73,30 @@ class SavedCaseRetriever:
                 row["phrases"] = [part.strip().rstrip(".") for part in text.split(",")
                                   if part.strip()]
             rows.append(row)
-        return {
+        result = {
             "correct_rank": record.get("correct_rank"),
-            "reference_text": record.get("correct_text"),
             "top_k": rows,
         }
+        if include_reference:
+            result["reference_text"] = record.get("correct_text")
+        return result
 
     @staticmethod
-    def _phrase_result(record: dict[str, Any], top_k: int) -> dict[str, Any]:
+    def _phrase_result(record: dict[str, Any], top_k: int,
+                       include_reference: bool = False) -> dict[str, Any]:
         raw = list(record.get("top_k", [])[:top_k])
-        return {
+        result = {
             "first_correct_rank": record.get("first_correct_rank"),
-            "reference_phrases": record.get("correct_phrases", []),
             "raw_top_k": raw,
             "semantic_top_k": deduplicate_phrase_results(raw),
         }
+        if include_reference:
+            result["reference_phrases"] = record.get("correct_phrases", [])
+        return result
 
     def retrieve(self, mode: RetrievalMode | str, *, sample_id: str | None = None,
-                 image_path: str | None = None, top_k: int = 10) -> dict[str, Any]:
+                 image_path: str | None = None, top_k: int = 10,
+                 include_reference: bool = False) -> dict[str, Any]:
         mode = RetrievalMode(mode)
         if top_k <= 0:
             raise ValueError("top_k must be positive")
@@ -97,16 +104,19 @@ class SavedCaseRetriever:
         if not resolved_id:
             raise ValueError("sample_id or image_path is required")
         if mode is RetrievalMode.COMPARE:
-            return self.compare(sample_id=resolved_id, top_k=top_k)
+            return self.compare(sample_id=resolved_id, top_k=top_k,
+                                include_reference=include_reference)
         record = self._get(mode, resolved_id)
         if mode is RetrievalMode.REPORT:
-            return self._text_result(record, top_k, combined=False)
+            return self._text_result(record, top_k, combined=False,
+                                     include_reference=include_reference)
         if mode is RetrievalMode.COMBINED_PHRASES:
-            return self._text_result(record, top_k, combined=True)
-        return self._phrase_result(record, top_k)
+            return self._text_result(record, top_k, combined=True,
+                                     include_reference=include_reference)
+        return self._phrase_result(record, top_k, include_reference=include_reference)
 
     def compare(self, *, sample_id: str | None = None, image_path: str | None = None,
-                top_k: int = 10) -> dict[str, Any]:
+                top_k: int = 10, include_reference: bool = False) -> dict[str, Any]:
         if top_k <= 0:
             raise ValueError("top_k must be positive")
         resolved_id = sample_id or (self._sample_from_image_path(image_path) if image_path else None)
@@ -122,7 +132,10 @@ class SavedCaseRetriever:
             "sample_id": resolved_id,
             "study_id": report.get("study_id"),
             "image_path": report.get("image_path") or independent.get("image_path"),
-            "report_retrieval": self._text_result(report, top_k, combined=False),
-            "combined_phrase_retrieval": self._text_result(combined, top_k, combined=True),
-            "independent_phrase_retrieval": self._phrase_result(independent, top_k),
+            "report_retrieval": self._text_result(
+                report, top_k, combined=False, include_reference=include_reference),
+            "combined_phrase_retrieval": self._text_result(
+                combined, top_k, combined=True, include_reference=include_reference),
+            "independent_phrase_retrieval": self._phrase_result(
+                independent, top_k, include_reference=include_reference),
         }

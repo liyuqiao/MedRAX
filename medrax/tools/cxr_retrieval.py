@@ -23,6 +23,13 @@ class CXRClinicalRetrievalInput(BaseModel):
         RetrievalMode.COMPARE,
         description="One retrieval representation or compare all experiments 1, 2, and 4.",
     )
+    include_reference: bool = Field(
+        False,
+        description=(
+            "Include the ground-truth report/phrases only for retrospective evaluation. "
+            "Keep false when generating an agent report to prevent answer leakage."
+        ),
+    )
 
 
 class CXRClinicalRetrievalTool(BaseTool):
@@ -52,16 +59,19 @@ class CXRClinicalRetrievalTool(BaseTool):
 
     def _run(self, image_path: str | None = None, sample_id: str | None = None, top_k: int = 10,
              mode: RetrievalMode | str = RetrievalMode.COMPARE,
+             include_reference: bool = False,
              run_manager: Optional[CallbackManagerForToolRun] = None):
         try:
             mode = RetrievalMode(mode)
             if mode is RetrievalMode.COMPARE:
                 result = self.retriever.compare(
-                    image_path=image_path, sample_id=sample_id, top_k=top_k)
+                    image_path=image_path, sample_id=sample_id, top_k=top_k,
+                    include_reference=include_reference)
                 experiments = [1, 2, 4]
             else:
                 result = self.retriever.retrieve(
-                    mode, image_path=image_path, sample_id=sample_id, top_k=top_k)
+                    mode, image_path=image_path, sample_id=sample_id, top_k=top_k,
+                    include_reference=include_reference)
                 experiments = [{
                     RetrievalMode.REPORT: 1,
                     RetrievalMode.COMBINED_PHRASES: 2,
@@ -84,5 +94,7 @@ class CXRClinicalRetrievalTool(BaseTool):
 
     async def _arun(self, image_path: str | None = None, sample_id: str | None = None,
                     top_k: int = 10, mode: RetrievalMode | str = RetrievalMode.COMPARE,
+                    include_reference: bool = False,
                     run_manager: Optional[AsyncCallbackManagerForToolRun] = None):
-        return self._run(image_path=image_path, sample_id=sample_id, top_k=top_k, mode=mode)
+        return self._run(image_path=image_path, sample_id=sample_id, top_k=top_k, mode=mode,
+                         include_reference=include_reference)
