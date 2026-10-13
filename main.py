@@ -22,6 +22,9 @@ def initialize_agent(
     tools_to_use=None,
     model_dir="/root/autodl-tmp/medrax-models",
     temp_dir="/root/autodl-tmp/medrax-temp",
+    retrieval_report_path=None,
+    retrieval_combined_path=None,
+    retrieval_independent_path=None,
     device="cuda",
     model="chatgpt-4o-latest",
     temperature=0.7,
@@ -65,6 +68,21 @@ def initialize_agent(
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
     }
 
+    retrieval_paths = (
+        retrieval_report_path, retrieval_combined_path, retrieval_independent_path
+    )
+    if all(retrieval_paths):
+        all_tools["CXRClinicalRetrievalTool"] = lambda: CXRClinicalRetrievalTool(
+            report_path=retrieval_report_path,
+            combined_path=retrieval_combined_path,
+            independent_path=retrieval_independent_path,
+        )
+    elif tools_to_use and "CXRClinicalRetrievalTool" in tools_to_use:
+        raise ValueError(
+            "CXRClinicalRetrievalTool requires report, combined-phrase, and "
+            "independent-phrase result paths"
+        )
+
     # Initialize only selected tools or all if none specified
     tools_dict = {}
     tools_to_use = tools_to_use or all_tools.keys()
@@ -102,6 +120,7 @@ if __name__ == "__main__":
         "ChestXRayClassifierTool",
         "ChestXRaySegmentationTool",
         "ChestXRayReportGeneratorTool",
+        "CXRClinicalRetrievalTool",
         # "XRayVQATool",
         # "LlavaMedTool",
         # "XRayPhraseGroundingTool",
@@ -121,6 +140,16 @@ if __name__ == "__main__":
         tools_to_use=selected_tools,
         model_dir="/root/autodl-tmp/medrax-models",  # Change this to the path of the model weights
         temp_dir="/root/autodl-tmp/medrax-temp",  # Change this to the path of the temporary directory
+        retrieval_report_path=(
+            "/root/autodl-tmp/cxr-clip/outputs/badcase/base-report.jsonl"
+        ),
+        retrieval_combined_path=(
+            "/root/autodl-tmp/cxr-clip/outputs/badcase/base-triple.jsonl"
+        ),
+        retrieval_independent_path=(
+            "/root/autodl-tmp/cxr-clip/outputs/phrase-retrieval-badcase/"
+            "baseline/retrieval-details.jsonl"
+        ),
         device="cuda",  # Change this to the device you want to use
         model="qwen3-vl-flash",  # Change this to the model you want to use, e.g. gpt-4o-mini
         temperature=0.7,
